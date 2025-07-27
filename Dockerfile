@@ -1,12 +1,13 @@
+# Use the official prebuilt Mayan EDMS image
 FROM mayanedms/mayanedms:latest
 
-# (Optional) You can add ENV overrides or package installs here
-
-# Set working directory
+# Set the working directory
 WORKDIR /opt/mayan-edms
 
-# Expose the default web port
+# Expose the default Mayan port
 EXPOSE 8000
 
-# Default command to start the web app
-CMD ["gunicorn", "mayan.wsgi", "--bind", "0.0.0.0:8000"]
+# Optional: you can override default settings using ENV vars from Railway
+
+# Start the built-in process launcher (handles web, workers, etc.)
+CMD ["/usr/bin/supervisord"]
