@@ -10,5 +10,3 @@ ENV MAYAN_DATABASE_ENGINE=django.db.backends.postgresql \
     MAYAN_MEDIA_ROOT=/var/lib/mayan
 
 EXPOSE 8000
-
-CMD ["mayan-edms.py", "runserver_plus", "0.0.0.0:8000"]
