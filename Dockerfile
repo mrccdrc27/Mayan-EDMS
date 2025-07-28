@@ -1,15 +1,39 @@
+# Use the official base image
 FROM mayanedms/mayanedms:latest
 
-ENV MAYAN_DATABASE_ENGINE=django.db.backends.postgresql \
-    MAYAN_DATABASE_NAME=railway \
-    MAYAN_DATABASE_USER=postgres \
-    MAYAN_DATABASE_PASSWORD=hpQmgGMvHJnGYcCqUhWNiuhqYIaOSvED \
-    MAYAN_DATABASE_HOST=crossover.proxy.rlwy.net \
-    MAYAN_DATABASE_PORT=28277 \
-    MAYAN_CELERY_BROKER_URL=amqp://bR88jsDWb0wRAirK:vrrxQZN~3VODWEV7cC-Il4xZ6wq7I3F4@mainline.proxy.rlwy.net:40157// \
-    MAYAN_ALLOWED_HOSTS=mayan-edms-production-63d8.up.railway.app \
-    DJANGO_CSRF_TRUSTED_ORIGINS=https://mayan-edms-production-63d8.up.railway.app \
-    DJANGO_SETTINGS_MODULE=mayan.settings.production \
-    SECURE_PROXY_SSL_HEADER="HTTP_X_FORWARDED_PROTO,https"
+# Copy override to fix proxy headers & CSRF handling
+COPY settings_override.py /opt/mayan-edms/settings/local.py
+
+# Define environment variables matching your Compose spec
+ENV \
+  # Database
+  MAYAN_DATABASES="{
+    'default':{
+      'ENGINE':'django.db.backends.postgresql',
+      'NAME':'${MAYAN_DATABASE_NAME}',
+      'PASSWORD':'${MAYAN_DATABASE_PASSWORD}',
+      'USER':'${MAYAN_DATABASE_USER}',
+      'HOST':'${MAYAN_DATABASE_HOST}',
+      'PORT':${MAYAN_DATABASE_PORT}
+    }
+  }" \
+  # Broker & backend
+  MAYAN_CELERY_BROKER_URL="${MAYAN_CELERY_BROKER_URL}" \
+  MAYAN_CELERY_RESULT_BACKEND="${MAYAN_CELERY_RESULT_BACKEND}" \
+  # Locking
+  MAYAN_LOCK_MANAGER_BACKEND="mayan.apps.lock_manager.backends.redis_lock.RedisLock" \
+  MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS="{ 'redis_url': '${MAYAN_CELERY_RESULT_BACKEND}' }" \
+  # App behavior
+  MAYAN_ALLOWED_HOSTS="${MAYAN_ALLOWED_HOSTS}" \
+  MAYAN_COMMON_ENABLE_HTTP_HOST_VALIDATION=True \
+  MAYAN_COMMON_DISABLE_LOCAL_STORAGE_CHECK=True \
+  MAYAN_COMMON_DEBUG=True \
+  MAYAN_COMMON_SITE_URL="${MAYAN_COMMON_SITE_URL}" \
+  DJANGO_CSRF_TRUSTED_ORIGINS="${DJANGO_CSRF_TRUSTED_ORIGINS}" \
+  SECURE_PROXY_SSL_HEADER="HTTP_X_FORWARDED_PROTO,https" \
+  # Media volume
+  MAYAN_MEDIA_ROOT="/var/lib/mayan"
 
 EXPOSE 8000
+
+CMD ["run_frontend"]
