@@ -1,3 +1,13 @@
+FROM mayanedms/mayanedms:s4.3
+
+# Switch to root to make modifications
+USER root
+
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Create entrypoint script directly in the Dockerfile
+RUN cat > /usr/local/bin/railway-entrypoint.sh << 'EOF'
 #!/bin/bash
 set -e
 
@@ -69,3 +79,22 @@ echo "Running initial setup..."
 # Start the frontend server
 echo "Starting Mayan EDMS frontend..."
 exec /usr/local/bin/entrypoint.sh run_frontend
+EOF
+
+RUN chmod +x /usr/local/bin/railway-entrypoint.sh
+
+# Switch back to mayan user
+USER mayan
+
+# Set working directory
+WORKDIR /var/lib/mayan
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/authentication/login/ || exit 1
+
+# Use our custom entrypoint
+ENTRYPOINT ["/usr/local/bin/railway-entrypoint.sh"]
