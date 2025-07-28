@@ -13,6 +13,8 @@ ENV MAYAN_DATABASE_ENGINE=django.db.backends.postgresql \
     MAYAN_COMMON_DISABLE_LOCAL_STORAGE_CHECK=True \
     MAYAN_COMMON_DEBUG=True \
     MAYAN_COMMON_SITE_URL=https://mayan-edms-production-63d8.up.railway.app \
-    DJANGO_CSRF_TRUSTED_ORIGINS=https://mayan-edms-production-63d8.up.railway.app
+    DJANGO_CSRF_TRUSTED_ORIGINS=https://mayan-edms-production-63d8.up.railway.app \
+    DJANGO_SETTINGS_MODULE=mayan.settings.production \
+    SECURE_PROXY_SSL_HEADER="HTTP_X_FORWARDED_PROTO,https"
 
 EXPOSE 8000
