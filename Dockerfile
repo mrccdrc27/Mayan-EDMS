@@ -11,6 +11,7 @@ ENV MAYAN_DATABASE_ENGINE=django.db.backends.postgresql \
     MAYAN_ALLOWED_HOSTS=mayan-edms-production.up.railway.app,localhost,127.0.0.1 \
     MAYAN_COMMON_ENABLE_HTTP_HOST_VALIDATION=True \
     MAYAN_COMMON_DISABLE_LOCAL_STORAGE_CHECK=True \
-    MAYAN_COMMON_DEBUG=True
+    MAYAN_COMMON_DEBUG=True \
+    DJANGO_CSRF_TRUSTED_ORIGINS=https://mayan-edms-production.up.railway.app
 
 EXPOSE 8000
