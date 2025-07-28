@@ -1,39 +1,71 @@
-# Use the official base image
-FROM mayanedms/mayanedms:latest
+#!/bin/bash
+set -e
 
-# Copy override to fix proxy headers & CSRF handling
-COPY settings_override.py /opt/mayan-edms/settings/local.py
+echo "Starting Mayan EDMS initialization..."
 
-# Define environment variables matching your Compose spec
-ENV \
-  # Database
-  MAYAN_DATABASES="{
-    'default':{
-      'ENGINE':'django.db.backends.postgresql',
-      'NAME':'${MAYAN_DATABASE_NAME}',
-      'PASSWORD':'${MAYAN_DATABASE_PASSWORD}',
-      'USER':'${MAYAN_DATABASE_USER}',
-      'HOST':'${MAYAN_DATABASE_HOST}',
-      'PORT':${MAYAN_DATABASE_PORT}
+# Convert Railway environment variables to Mayan format
+if [ -n "$DATABASE_URL" ]; then
+    # Parse DATABASE_URL and set MAYAN_DATABASES
+    python3 -c "
+import os
+from urllib.parse import urlparse
+
+db_url = os.environ.get('DATABASE_URL')
+if db_url:
+    parsed = urlparse(db_url)
+    db_config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': parsed.path[1:],  # Remove leading slash
+        'USER': parsed.username,
+        'PASSWORD': parsed.password,
+        'HOST': parsed.hostname,
+        'PORT': parsed.port or 5432
     }
-  }" \
-  # Broker & backend
-  MAYAN_CELERY_BROKER_URL="${MAYAN_CELERY_BROKER_URL}" \
-  MAYAN_CELERY_RESULT_BACKEND="${MAYAN_CELERY_RESULT_BACKEND}" \
-  # Locking
-  MAYAN_LOCK_MANAGER_BACKEND="mayan.apps.lock_manager.backends.redis_lock.RedisLock" \
-  MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS="{ 'redis_url': '${MAYAN_CELERY_RESULT_BACKEND}' }" \
-  # App behavior
-  MAYAN_ALLOWED_HOSTS="${MAYAN_ALLOWED_HOSTS}" \
-  MAYAN_COMMON_ENABLE_HTTP_HOST_VALIDATION=True \
-  MAYAN_COMMON_DISABLE_LOCAL_STORAGE_CHECK=True \
-  MAYAN_COMMON_DEBUG=True \
-  MAYAN_COMMON_SITE_URL="${MAYAN_COMMON_SITE_URL}" \
-  DJANGO_CSRF_TRUSTED_ORIGINS="${DJANGO_CSRF_TRUSTED_ORIGINS}" \
-  SECURE_PROXY_SSL_HEADER="HTTP_X_FORWARDED_PROTO,https" \
-  # Media volume
-  MAYAN_MEDIA_ROOT="/var/lib/mayan"
+    
+    # Set environment variable for Mayan
+    import json
+    os.environ['MAYAN_DATABASES'] = json.dumps({'default': db_config})
+    
+    # Export for the shell
+    with open('/tmp/db_env.sh', 'w') as f:
+        f.write(f\"export MAYAN_DATABASES='{json.dumps({\"default\": db_config})}'\")
+"
+    source /tmp/db_env.sh 2>/dev/null || true
+fi
 
-EXPOSE 8000
+# Set other required environment variables if not set
+export MAYAN_CELERY_BROKER_URL=${MAYAN_CELERY_BROKER_URL:-$RABBITMQ_URL}
+export MAYAN_ALLOWED_HOSTS=${MAYAN_ALLOWED_HOSTS:-"*"}
 
-CMD ["run_frontend"]
+# Wait for database to be ready
+echo "Waiting for database..."
+timeout=60
+counter=0
+until python3 -c "
+import os
+import django
+from django.conf import settings
+from django.core.management import execute_from_command_line
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mayan.settings.production')
+django.setup()
+from django.db import connection
+connection.ensure_connection()
+" 2>/dev/null; do
+    counter=$((counter + 1))
+    if [ $counter -gt $timeout ]; then
+        echo "Database connection timeout"
+        exit 1
+    fi
+    echo "Waiting for database... ($counter/$timeout)"
+    sleep 1
+done
+
+echo "Database is ready!"
+
+# Use the original Mayan entrypoint for setup
+echo "Running initial setup..."
+/usr/local/bin/entrypoint.sh run_initial_setup_or_perform_upgrade
+
+# Start the frontend server
+echo "Starting Mayan EDMS frontend..."
+exec /usr/local/bin/entrypoint.sh run_frontend
